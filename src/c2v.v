@@ -8,6 +8,7 @@ import strings
 import json
 import time
 import toml
+import regex
 
 const version = '0.3.1'
 
@@ -321,9 +322,12 @@ fn (mut c C2V) fn_decl(mut node Node, gen_types string) {
 		vprintln('')
 		return
 	}
-	if c.is_dir && c.cur_file.ends_with('/info.c') {
-		// TODO tmp doom hack
-		return
+
+	$if doom ? {
+		if c.is_dir && c.cur_file.ends_with('/info.c') {
+			// TODO tmp doom hack
+			return
+		}
 	}
 	// No statements - it's a function declration, skip it
 	no_stmts := if !node.has_child_of_kind(.compound_stmt) { true } else { false }
@@ -2062,6 +2066,10 @@ fn main() {
 		eprintln('  c2v file.c')
 		eprintln('  c2v wrapper file.h')
 		eprintln('  c2v folder/')
+		eprintln('')
+		eprintln('args:')
+		eprintln('  -keep_ast		keep ast files')
+		eprintln('  -print_tree		print the entire tree')
 		exit(1)
 	}
 	vprintln(os.args.str())
@@ -2103,31 +2111,39 @@ fn (mut c2v C2V) translate_file(path string) {
 	mut lines := []string{}
 	mut ast_path := path
 	ext := os.file_ext(path)
-	if path.contains('/src/') {
-		// Hack to fix 'doomtype.h' file not found
-		// TODO come up with a better solution
-		work_path := path.before('/src/') + '/src'
-		vprintln(work_path)
-		os.chdir(work_path) or {}
+
+	$if doom ? {
+		if path.contains('/src/') {
+			// Hack to fix 'doomtype.h' file not found
+			// TODO come up with a better solution
+			work_path := path.before('/src/') + '/src'
+			vprintln(work_path)
+			os.chdir(work_path) or {}
+		}
 	}
 	additional_clang_flags := c2v.get_additional_flags(path)
 	cmd := '${clang} ${additional_clang_flags} -w -Xclang -ast-dump=json -fsyntax-only -fno-diagnostics-color -c ${os.quoted_path(path)}'
 	vprintln('DA CMD')
 	vprintln(cmd)
+	mut re := regex.regex_opt('${ext}$') or { panic(err) }
 	out_ast := if c2v.is_dir {
 		os.getwd() + '/' + (os.dir(os.dir(path)) + '/${c2v.project_output_dirname}/' +
-			os.base(path.replace(ext, '.json')))
+			os.base(re.replace(path, '.json')))
 	} else {
 		// file.c => file.json
-		path.replace(ext, '.json')
+		vprintln(path)
+		re.replace(path, '.json')
 	}
 	out_ast_dir := os.dir(out_ast)
 	if c2v.is_dir && !os.exists(out_ast_dir) {
 		os.mkdir(out_ast_dir) or { panic(err) }
 	}
+	vprintln('running in path: ${os.abs_path('.')}')
 	vprintln('EXT=${ext} out_ast=${out_ast}')
 	vprintln('out_ast=${out_ast}')
-	clang_result := os.system('${cmd} > ${out_ast}')
+	vprintln('${cmd} > "${out_ast}"')
+	clang_result := os.system('${cmd} > "${out_ast}"')
+	vprintln('${clang_result}')
 	if clang_result != 0 {
 		eprintln('\nThe file ${path} could not be parsed as a C source file.')
 		exit(1)

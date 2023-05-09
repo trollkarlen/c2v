@@ -83,7 +83,7 @@ jobs:
           ls -la /Users/runner/work/c2v/c2v/c2v
           ln -s  /Users/runner/work/c2v/c2v/c2v ~/.vmodules/c2v
           mkdir -p ~/code/
-          v -g ~/.vmodules/c2v/
+          v -g -d doom ~/.vmodules/c2v/
           ~/.vmodules/c2v/c2v || true
 
       - name: Test c2v
